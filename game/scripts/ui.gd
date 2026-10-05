@@ -165,14 +165,17 @@ func _style_btn(b: Button, c: Color, r := 22) -> void:
 	b.add_theme_stylebox_override("hover", _box(c.lightened(0.12), r))
 	b.add_theme_stylebox_override("pressed", _box(c.darkened(0.2), r))
 	b.add_theme_stylebox_override("disabled", _box(Color(c.r, c.g, c.b, 0.35), r))
-	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	var focus := _box(Color(0, 0, 0, 0), r)
+	focus.border_color = Color("#ffe3ef")
+	focus.set_border_width_all(2)
+	b.add_theme_stylebox_override("focus", focus)
 
 
 func _btn(text: String, c: Color, min_size := Vector2(0, 64), fs := 26, r := 22) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.custom_minimum_size = min_size
-	b.focus_mode = Control.FOCUS_NONE
+	b.focus_mode = Control.FOCUS_NONE if OS.has_feature("mobile") else Control.FOCUS_ALL
 	_style_btn(b, c, r)
 	for k in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
 		b.add_theme_color_override(k, Color.WHITE)
@@ -253,6 +256,13 @@ func _round_btn(text: String, c: Color, d: float, fs := 26) -> Button:
 # ---------- menu ----------
 
 func _build_menu() -> void:
+	if not OS.has_feature("mobile"):
+		load("res://scripts/desktop_menu.gd").build(self)
+	else:
+		_build_touch_menu()
+
+
+func _build_touch_menu() -> void:
 	menu = Control.new()
 	menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(menu)
@@ -269,8 +279,11 @@ func _build_menu() -> void:
 	menu.add_child(side)
 	var v := _centered_scroll(side)
 
-	var title := _label("PekaBoo", 66, PINK)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var title := TextureRect.new()
+	title.texture = load("res://assets/branding/pekaboo_logo.png")
+	title.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	title.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	title.custom_minimum_size = Vector2(0, 210)
 	v.add_child(title)
 	var sub := _label("Hide & seek for two 💕", 22, MUTED)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1560,6 +1573,7 @@ func _build_wardrobe() -> void:
 
 
 func open_wardrobe() -> void:
+	root.move_child(wardrobe.get_parent(), -1)
 	wardrobe.visible = true
 
 

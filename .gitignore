@@ -16,3 +16,8 @@ assets-src/
 
 # the public download page is its own repo
 download-page/
+
+# Local desktop engine download and verification output
+tools/Godot*.exe
+tools/godot.zip
+verification/

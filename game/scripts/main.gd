@@ -171,7 +171,8 @@ var _exp_plainfont := false
 var _exp_scale := 1.0
 var _reset_profile := false
 var _shot_args := PackedStringArray()
-var _loading: ColorRect
+var _loading: Control
+var desktop_controls: RefCounted
 const BENCH_VIEWS := [
 	[12.0, 0.1, -9.0, PI, -0.05], [11.5, 0.1, 3.0, PI, -0.2], [8.5, 0.1, 13.5, 0.0, -0.2], [15.0, 0.1, 13.0, 2.6, -0.25],
 	[4.5, 3.3, 4.5, 0.0, -0.3], [18.0, 3.3, 13.0, -1.2, -0.25], [-6.0, 0.1, 6.0, 2.4, -0.2], [20.0, 0.1, 19.0, PI, -0.1],
@@ -207,6 +208,9 @@ func _ready() -> void:
 	ui = UI.new()
 	add_child(ui)
 	ui.build(CHAT, EMOTES)
+	if not OS.has_feature("mobile"):
+		desktop_controls = load("res://scripts/desktop_controls.gd").new()
+		desktop_controls.setup(self)
 	if is_touch:
 		ui.enable_multitouch()
 	ui.apply_settings(settings)
@@ -240,6 +244,11 @@ func _ready() -> void:
 	if _is_anniversary():
 		house.baked.connect(chill.build_anniversary, CONNECT_ONE_SHOT) if not house.is_baked else chill.build_anniversary()
 	_to_menu("")
+	if "--desktop-qa" in OS.get_cmdline_user_args():
+		var desktop_qa: Node = load("res://scripts/desktop_qa.gd").new()
+		add_child(desktop_qa)
+		desktop_qa.call_deferred("run")
+		return
 	if auto == "" or auto == "bench" or auto.begins_with("shot"):
 		_start_warmup()
 	if auto == "qa":
@@ -271,36 +280,7 @@ func _ready() -> void:
 ## Shows every corner of the house once behind a loading screen so all shaders are
 ## compiled up front, instead of stuttering the first time you walk into a room.
 func _start_warmup() -> void:
-	_loading = ColorRect.new()
-	_loading.color = Color(0.35, 0.06, 0.56)
-	_loading.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var art := TextureRect.new()
-	art.texture = load("res://splash.png")
-	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_loading.add_child(art)
-	var bar := ProgressBar.new()
-	bar.name = "bar"
-	bar.show_percentage = false
-	# a thin line between the name and the peeking face
-	bar.anchor_left = 0.5
-	bar.anchor_right = 0.5
-	bar.anchor_top = 0.505
-	bar.anchor_bottom = 0.505
-	bar.offset_left = -130
-	bar.offset_right = 130
-	bar.offset_top = -3
-	bar.offset_bottom = 3
-	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color(1, 1, 1, 0.18)
-	bg.set_corner_radius_all(3)
-	var fill := StyleBoxFlat.new()
-	fill.bg_color = Color(1, 1, 1, 0.9)
-	fill.set_corner_radius_all(3)
-	bar.add_theme_stylebox_override("background", bg)
-	bar.add_theme_stylebox_override("fill", fill)
-	_loading.add_child(bar)
+	_loading = load("res://scripts/splash_screen.gd").new()
 	ui.root.add_child(_loading)
 	_warm_i = 1
 
@@ -309,7 +289,7 @@ func _warm_tick() -> void:
 	if not house.is_baked:
 		return
 	var views := BENCH_VIEWS.size() * 4
-	var bar := _loading.get_node_or_null("bar") as ProgressBar
+	var bar := _loading.get_meta("bar", null) as ProgressBar
 	if bar:
 		bar.value = 100.0 * _warm_i / views
 	if _warm_i > views:
@@ -471,6 +451,8 @@ func _load_cfg() -> void:
 
 
 func _save_cfg() -> void:
+	if "--desktop-qa" in OS.get_cmdline_user_args():
+		return
 	if auto != "" and not _reset_profile:
 		return
 	var cf := ConfigFile.new()
@@ -2357,6 +2339,9 @@ func _footprint_short(p: Vector3) -> void:
 # ---------- input ----------
 
 func _read_keyboard() -> void:
+	if desktop_controls != null and desktop_controls.blocks_movement():
+		me.move_input = Vector2.ZERO
+		return
 	var k := Vector2.ZERO
 	if Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP):
 		k.y -= 1.0
@@ -2381,6 +2366,10 @@ func _capture_mouse() -> void:
 
 ## Buttons get every finger first, before panels or the joystick can swallow the touch.
 func _input(ev: InputEvent) -> void:
+	if desktop_controls != null and ev is InputEventKey:
+		if _warm_i > 0 or desktop_controls.handle(ev):
+			get_viewport().set_input_as_handled()
+			return
 	if ev is InputEventScreenTouch or ev is InputEventMouseButton:
 		print("TOUCHDBG ev %s f=%d" % [ev.as_text(), Engine.get_process_frames()])
 	if is_touch and ev is InputEventScreenTouch and ev.pressed and ui != null:
@@ -2391,6 +2380,13 @@ func _input(ev: InputEvent) -> void:
 
 
 func _unhandled_input(ev: InputEvent) -> void:
+	if desktop_controls != null and ev is InputEventMouseButton and ev.pressed and not is_touch and phase != "menu" and not ui.results.visible and desktop_controls.modal() == null:
+		desktop_controls._release_focus()
+		_capture_mouse()
+		get_viewport().set_input_as_handled()
+		return
+	if desktop_controls != null and desktop_controls.blocks_movement():
+		return
 	var sens: float = settings["sens"]
 	if ev is InputEventScreenTouch:
 		if ev.pressed:
@@ -2424,7 +2420,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 		me.look(ev.relative * 0.0022 * sens)
 	elif ev is InputEventMouseButton and ev.pressed and not is_touch and phase != "menu":
 		_capture_mouse()
-	elif ev is InputEventKey and ev.pressed and not ev.echo:
+	elif ev is InputEventKey and ev.pressed and not ev.echo and desktop_controls == null:
 		match ev.physical_keycode:
 			KEY_ESCAPE:
 				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -2442,12 +2438,16 @@ func _unhandled_input(ev: InputEvent) -> void:
 				var i: int = ev.physical_keycode - KEY_1
 				if i < ui.tool_ids.size() and ui.tool_btns[i].visible and not ui.tool_btns[i].disabled:
 					_do_action(ui.tool_ids[i])
-	elif ev is InputEventKey and not ev.pressed and ev.physical_keycode == KEY_SHIFT:
+	elif ev is InputEventKey and not ev.pressed and ev.physical_keycode == KEY_SHIFT and desktop_controls == null:
 		me.run = false
 
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		if me:
+			me.run = false
+		if desktop_controls != null:
+			desktop_controls.reset_shift()
 		stick_index = -1
 		look_index = -1
 		stick_vec = Vector2.ZERO
