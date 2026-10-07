@@ -136,7 +136,6 @@ func build(chat_lines: Array, emotes: Array) -> void:
 	overlays = Overlays.new()
 	root.add_child(overlays)
 	overlays.setup(self)
-	_build_wardrobe()
 	_build_menu()
 	_build_find_panel()
 	_build_settings()
@@ -272,21 +271,16 @@ func _build_menu() -> void:
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	menu.add_child(shade)
 
-	# logo badge, top left
-	var badge := PanelContainer.new()
-	var bsb := _box(Color("#fdfbef"), 30, 10)
-	bsb.shadow_color = Color(0, 0, 0, 0.3)
-	bsb.shadow_size = 18
-	badge.add_theme_stylebox_override("panel", bsb)
-	badge.position = Vector2(30, 22)
-	menu.add_child(badge)
+	# the logo, cut out, sitting right on the scene (top left)
 	var logo := TextureRect.new()
 	logo.texture = load("res://assets/ui_logo.png")
 	logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	logo.custom_minimum_size = Vector2(300, 238)
+	logo.position = Vector2(18, 10)
+	logo.size = Vector2(350, 280)
 	logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	badge.add_child(logo)
+	menu.add_child(logo)
+	_menu_parts.append(logo)
 
 	# you: name + character + wardrobe, bottom left (your character stands right behind it)
 	var me_card := PanelContainer.new()
@@ -295,6 +289,7 @@ func _build_menu() -> void:
 	me_card.position = Vector2(30, -170)
 	me_card.custom_minimum_size = Vector2(400, 0)
 	menu.add_child(me_card)
+	_menu_parts.append(me_card)
 	var mv := VBoxContainer.new()
 	mv.add_theme_constant_override("separation", 10)
 	me_card.add_child(mv)
@@ -331,6 +326,7 @@ func _build_menu() -> void:
 	col.offset_bottom = 230
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	menu.add_child(col)
+	_menu_parts.append(col)
 	col.add_child(_menu_btn("👫", "PLAY TOGETHER", "Online, or on the same Wi-Fi / hotspot", PINK, Vector2(0, 112), func(): _show_menu_panel(play_panel)))
 	col.add_child(_menu_btn("🌙", "CHILL NIGHT", "Candles, stars and love songs", Color("#6a42a8"), Vector2(0, 96), func(): chill_solo.emit(_name(), char_idx)))
 	var row := HBoxContainer.new()
@@ -354,6 +350,7 @@ func _build_menu() -> void:
 	gear.position = Vector2(-90, 24)
 	gear.pressed.connect(open_settings)
 	menu.add_child(gear)
+	_menu_parts.append(gear)
 
 	# credits + anniversary, bottom right
 	var foot := VBoxContainer.new()
@@ -363,6 +360,7 @@ func _build_menu() -> void:
 	foot.position = Vector2(-40, -20)
 	foot.alignment = BoxContainer.ALIGNMENT_END
 	menu.add_child(foot)
+	_menu_parts.append(foot)
 	anniv_label = _outlined(_label("", 19, Color("#ffd1ec")), 6)
 	anniv_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	foot.add_child(anniv_label)
@@ -372,6 +370,7 @@ func _build_menu() -> void:
 
 	_build_play_panel()
 	_build_practice_panel()
+	_build_wardrobe()
 
 
 ## A big title-screen button: emoji, a bold title and a short line under it.
@@ -411,6 +410,7 @@ func _menu_btn(icon: String, title: String, sub: String, c: Color, size: Vector2
 
 var play_panel: Control
 var practice_panel: Control
+var _menu_parts: Array[Control] = []   # hidden while the wardrobe is open
 
 
 func _menu_modal(title: String) -> Array:
@@ -578,6 +578,8 @@ func _cycle_char(d: int) -> void:
 
 func _update_char_label() -> void:
 	char_label.text = "%s  ·  %d of %d" % [Kit.CHAR_STYLES[char_idx]["name"], char_idx + 1, Kit.CHARS.size()]
+	if wardrobe_open():
+		_refresh_wardrobe.call_deferred()
 
 
 func _upper_code(t: String) -> void:
@@ -601,6 +603,7 @@ func show_menu(pname: String, idx: int, status := "") -> void:
 	status_label.add_theme_color_override("font_color", Color("#ffb3b3"))
 	play_panel.visible = false
 	practice_panel.visible = false
+	close_wardrobe()
 	menu.visible = true
 	lobby.visible = false
 	hud.visible = false
@@ -1677,51 +1680,136 @@ const ACCS := [["", "✖\nNone"], ["bow", "🎀\nBow"], ["flower", "🌸\nFlower
 var _ward_rows := {}
 
 
+var _ward_name: Label
+var _ward_swatches := {}   # "top"/"bottom"/"acc" -> [[button, value], ...]
+
+
 func _build_wardrobe() -> void:
-	wardrobe = _card(CREAM)
-	wardrobe.custom_minimum_size = Vector2(600, 0)
-	var c := CenterContainer.new()
-	c.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(c)
-	c.add_child(wardrobe)
+	wardrobe = PanelContainer.new()
+	var sb := _box(Color(1.0, 0.98, 0.95, 0.96), 30, 18)
+	sb.shadow_color = Color(0, 0, 0, 0.3)
+	sb.shadow_size = 18
+	wardrobe.add_theme_stylebox_override("panel", sb)
+	wardrobe.anchor_left = 1.0
+	wardrobe.anchor_right = 1.0
+	wardrobe.anchor_top = 0.0
+	wardrobe.anchor_bottom = 1.0
+	wardrobe.offset_left = -560
+	wardrobe.offset_right = -24
+	wardrobe.offset_top = 20
+	wardrobe.offset_bottom = -20
 	wardrobe.visible = false
+	menu.add_child(wardrobe)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	wardrobe.add_child(scroll)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
-	wardrobe.add_child(v)
-	var t := _label("👗 Wardrobe", 32)
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(t)
-	for row in [["top", "Top"], ["bottom", "Bottom / extra"]]:
-		v.add_child(_label(row[1], 22, MUTED))
-		var h := HBoxContainer.new()
-		h.add_theme_constant_override("separation", 8)
-		v.add_child(h)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	v.add_theme_constant_override("separation", 7)
+	scroll.add_child(v)
+	var top := HBoxContainer.new()
+	v.add_child(top)
+	var t := _label("👗 Wardrobe", 30, INK)
+	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(t)
+	var done_x := _btn("✓", GREEN, Vector2(50, 48), 26)
+	done_x.pressed.connect(close_wardrobe)
+	top.add_child(done_x)
+	# who you're dressing
+	var who := HBoxContainer.new()
+	who.add_theme_constant_override("separation", 8)
+	v.add_child(who)
+	var prev := _btn("◀", PURPLE, Vector2(52, 44), 22)
+	prev.pressed.connect(func(): _cycle_char(-1))
+	who.add_child(prev)
+	_ward_name = _label("", 24, INK)
+	_ward_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_ward_name.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_ward_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	who.add_child(_ward_name)
+	var nxt := _btn("▶", PURPLE, Vector2(52, 44), 22)
+	nxt.pressed.connect(func(): _cycle_char(1))
+	who.add_child(nxt)
+	for row in [["top", "👕 Top"], ["bottom", "👖 Bottom / extra"]]:
+		v.add_child(_label(row[1], 19, MUTED))
+		var grid := GridContainer.new()
+		grid.columns = 9
+		grid.add_theme_constant_override("h_separation", 6)
+		grid.add_theme_constant_override("v_separation", 6)
+		v.add_child(grid)
 		var key: String = row[0]
-		var reset := _btn("✖", MUTED, Vector2(58, 58), 22)
+		var list := []
+		var reset := _btn("↺", Color("#c9bfd2"), Vector2(50, 46), 22)
+		reset.tooltip_text = "Original"
 		reset.pressed.connect(func(): _set_outfit(key, null))
-		h.add_child(reset)
+		grid.add_child(reset)
+		list.append([reset, null])
 		for col in TOPS:
-			var b := _btn("", Color(col), Vector2(58, 58), 22)
+			var b := _btn("", Color(col), Vector2(50, 46), 22)
 			var cc := Color(col)
 			b.pressed.connect(func(): _set_outfit(key, cc))
-			h.add_child(b)
-	v.add_child(_label("Accessory", 22, MUTED))
-	var ah := HBoxContainer.new()
-	ah.add_theme_constant_override("separation", 8)
-	v.add_child(ah)
+			grid.add_child(b)
+			list.append([b, cc])
+		_ward_swatches[key] = list
+	v.add_child(_label("✨ Accessory", 19, MUTED))
+	var ag := GridContainer.new()
+	ag.columns = 4
+	ag.add_theme_constant_override("h_separation", 10)
+	ag.add_theme_constant_override("v_separation", 10)
+	v.add_child(ag)
+	var alist := []
 	for a in ACCS:
-		var ab := _btn(a[1], PURPLE, Vector2(66, 84), 19)
+		var ab := _btn(a[1], PURPLE, Vector2(112, 72), 18)
 		var ak: String = a[0]
 		ab.pressed.connect(func(): _set_outfit("acc", ak))
-		ah.add_child(ab)
-	var done := _btn("Done 💜", GREEN, Vector2(0, 60), 26)
-	done.pressed.connect(func(): wardrobe.visible = false)
+		ag.add_child(ab)
+		alist.append([ab, ak])
+	_ward_swatches["acc"] = alist
+	var done := _btn("Done 💜", GREEN, Vector2(0, 52), 24)
+	done.pressed.connect(close_wardrobe)
 	v.add_child(done)
 
 
+## The dressing room: the menu steps aside and the camera comes in close on your character.
 func open_wardrobe() -> void:
+	for c in _menu_parts:
+		c.visible = false
 	wardrobe.visible = true
+	_refresh_wardrobe()
+
+
+func close_wardrobe() -> void:
+	wardrobe.visible = false
+	for c in _menu_parts:
+		c.visible = true
+
+
+func wardrobe_open() -> bool:
+	return wardrobe != null and wardrobe.visible
+
+
+## Outline the picks that are on right now.
+func _refresh_wardrobe() -> void:
+	if _ward_name:
+		_ward_name.text = Kit.CHAR_STYLES[char_idx]["name"]
+	for key in _ward_swatches:
+		var cur = outfit.get(key, null if key != "acc" else null)
+		for pair in _ward_swatches[key]:
+			var b: Button = pair[0]
+			var val = pair[1]
+			var on := false
+			if key == "acc":
+				on = (str(cur) == str(val)) if cur != null else val == "" and not outfit.has("acc")
+				if not outfit.has("acc"):
+					on = false
+			elif val == null:
+				on = cur == null
+			elif cur != null:
+				on = (Color(str(cur)) if not (cur is Color) else cur).is_equal_approx(val)
+			var st: StyleBoxFlat = b.get_theme_stylebox("normal").duplicate()
+			st.border_color = INK
+			st.set_border_width_all(4 if on else 0)
+			b.add_theme_stylebox_override("normal", st)
 
 
 func _set_outfit(key: String, value) -> void:
@@ -1730,3 +1818,4 @@ func _set_outfit(key: String, value) -> void:
 	else:
 		outfit[key] = value
 	outfit_changed.emit(outfit.duplicate())
+	_refresh_wardrobe()

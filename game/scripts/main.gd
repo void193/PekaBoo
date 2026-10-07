@@ -335,6 +335,9 @@ func _warm_tick() -> void:
 				ui._show_menu_panel(ui.play_panel)
 			elif _menu_panel == "practice":
 				ui._show_menu_panel(ui.practice_panel)
+			elif _menu_panel == "ward":
+				ui.open_wardrobe()
+				_on_outfit({"top": Color("#ff94c4"), "acc": "crown"})
 			await get_tree().create_timer(2.0).timeout
 			if _snap_out != "":
 				get_viewport().get_texture().get_image().save_png(_snap_out)
@@ -447,6 +450,7 @@ func _parse_args() -> void:
 			auto_file = a.substr(11)
 		elif a.begins_with("--menushot"):
 			auto = "shotmenu"
+			# --menushot=ward opens the wardrobe
 			_menu_panel = a.substr(11) if a.length() > 11 else ""
 		elif a.begins_with("--chillshot="):
 			auto = "shotchill"
@@ -745,7 +749,8 @@ func _on_outfit(o: Dictionary) -> void:
 
 func _apply_outfit() -> void:
 	var o: Dictionary = settings.get("outfits", {}).get(str(my_char), {})
-	ui.outfit = o.duplicate()
+	ui.outfit = _outfit_in(o)
+	ui._refresh_wardrobe()
 	me.set_outfit(_outfit_in(o))
 	if Net.is_online():
 		_fx({"k": "outfit", "o": o})
@@ -2273,10 +2278,17 @@ func _menu_preview(dt: float) -> void:
 	_preview_t += dt
 	me.visual.visible = true
 	me.yaw = PI
-	me.pitch = -0.02
-	me.shoulder = 1.0
-	me.cam_dist = 3.6
-	me.visual.rotation.y = sin(_preview_t * 0.6) * 0.5
+	if ui.wardrobe_open():
+		# dressing room: close up, character on the left, slowly turning to show every side
+		me.pitch = lerpf(me.pitch, -0.2, 1.0 - exp(-dt * 4.0))
+		me.shoulder = lerpf(me.shoulder, 1.05, 1.0 - exp(-dt * 4.0))
+		me.cam_dist = lerpf(me.cam_dist, 2.25, 1.0 - exp(-dt * 4.0))
+		me.visual.rotation.y += dt * 0.7
+	else:
+		me.pitch = lerpf(me.pitch, -0.02, 1.0 - exp(-dt * 4.0))
+		me.shoulder = lerpf(me.shoulder, 1.0, 1.0 - exp(-dt * 4.0))
+		me.cam_dist = lerpf(me.cam_dist, 3.6, 1.0 - exp(-dt * 4.0))
+		me.visual.rotation.y = lerp_angle(me.visual.rotation.y, sin(_preview_t * 0.6) * 0.5, 1.0 - exp(-dt * 3.0))
 
 
 func _update_pillows(dt: float) -> void:
