@@ -49,6 +49,13 @@ func run() -> void:
 		print("QA DONE passed=%d failed=%d" % [passed, failed])
 		get_tree().quit(1 if failed > 0 else 0)
 		return
+	if "--traps" in OS.get_cmdline_user_args() + OS.get_cmdline_args():
+		await test_traps()
+		print("QA DONE passed=%d failed=%d" % [passed, failed])
+		for f in fails:
+			print("QA FAILED: ", f)
+		get_tree().quit()
+		return
 	if "--acts" in OS.get_cmdline_user_args() + OS.get_cmdline_args():
 		await test_explore_actions()
 		await start_bot_round(true)
@@ -1047,13 +1054,17 @@ func test_traps() -> void:
 			hit = true
 			break
 	check(hit, "a thrown pillow hits the other player")
-	# X-ray marks the bot with a dot
-	m.uses["xray"] = 3
+	# X-ray: one per round, and only a blurry ring a few metres off the hider
+	check(m.uses.get("xray", 0) == 1 or int(m.rules.get("xrays", 1)) != 1, "one X-ray per round by default")
+	var r: RemotePlayer = m.remotes[Bot.ID]
+	me().teleport(r.global_position + Vector3(6.0, 0.1, 0.0), 0.0)
+	await frames(3)
 	m.cd.erase("xray")
 	m._do_action("xray")
 	await frames(3)
-	var r: RemotePlayer = m.remotes[Bot.ID]
-	check(r._dot != null and r._dot.visible, "X-ray shows a dot on the hider")
+	check(r._dot != null and r._dot.visible, "X-ray shows a ring near the hider")
+	var off := Vector2(r._dot.position.x, r._dot.position.z).length()
+	check(off >= 2.4 and off <= 4.6, "the X-ray ring is %.1f m off the real spot" % off)
 	# radar
 	m.cd.erase("radar")
 	m._do_action("radar")

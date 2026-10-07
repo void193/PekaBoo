@@ -45,7 +45,6 @@ var lights_used := false
 var crouching := false
 var radar_t := 22.0
 var xray_t := 45.0
-var wiggle_t := 30.0
 var xrays_left := 2
 
 
@@ -71,10 +70,9 @@ func on_round_start(my_role: String) -> void:
 	tease_t = randf_range(25.0, 40.0)
 	boo_t = 0.0
 	lights_used = false
-	xrays_left = int(main.rules.get("xrays", 3))
+	xrays_left = int(main.rules.get("xrays", 1))
 	radar_t = randf_range(18.0, 26.0)
 	xray_t = randf_range(40.0, 55.0)
-	wiggle_t = randf_range(22.0, 32.0)
 	if role == "seeker":
 		pos = main.house.seeker_spawn
 		state = "blind"
@@ -112,9 +110,6 @@ func on_fx(k: String, m: Dictionary, from: int) -> void:
 	if not active or from == ID:
 		return
 	var me: Player = main.me
-	if k == "honk" and me.global_position.distance_to(pos) < 5.0:
-		body.hop()
-		stun = maxf(stun, 0.5)
 	if k == "smoke" and role == "seeker" and me.global_position.distance_to(pos) < 7.0:
 		stun = maxf(stun, 2.0)
 		state = "wander"
@@ -271,13 +266,9 @@ func _seeker(dt: float) -> void:
 		xrays_left -= 1
 		xray_t = randf_range(45.0, 60.0) * [1.6, 1.0, 0.7][skill]
 		main._bot_fx({"k": "xray"})
-		if not me.ghost and me.global_position.distance_to(pos) < 25.0:
-			if me.hide_spot >= 0:
-				goal_spot = me.hide_spot
-				_path_to(main.house.hide_spots[me.hide_spot]["exit"])
-				state = "check"
-			else:
-				_investigate(me.global_position)
+		# same blurry X-ray as players get: it only learns roughly where you are
+		if not me.ghost and me.global_position.distance_to(pos) < 20.0:
+			_investigate(me.global_position + main.xray_blur())
 	match state:
 		"wander":
 			if path_i >= path.size():
@@ -441,11 +432,6 @@ func _hider(dt: float) -> void:
 	if not lights_used and main.phase_left < main.seek_time * 0.5 and randf() < 0.002:
 		lights_used = true
 		main._bot_fx({"k": "lights", "d": 10.0})
-	if disguise != "":
-		wiggle_t -= dt
-		if wiggle_t <= 0.0:
-			wiggle_t = randf_range(25.0, 35.0)
-			main._bot_fx({"k": "wiggle"})
 	# stare at the bot's hiding place too long and it might BOO you
 	boo_t -= dt
 	var d := me.global_position.distance_to(_eye())

@@ -34,7 +34,7 @@ const GLASS := Color(0.12, 0.08, 0.16, 0.62)
 
 var settings := {"music": 0.7, "sfx": 0.9, "sens": 1.0, "quality": 1, "server": "", "fps": false,
 	"hide": 45.0, "seek": 180.0, "bot": 1, "prints": true, "wiggle": true, "heat": true, "halfping": true,
-	"bananas": 2, "smokes": 2, "pillows": 5, "xrays": 3}
+	"bananas": 2, "smokes": 2, "pillows": 5, "xrays": 1}
 var s_hide: HSlider
 var s_seek: HSlider
 var s_bananas: HSlider
@@ -662,7 +662,7 @@ func _build_settings() -> void:
 	s_bananas = _value_slider(v, "🍌 Bananas each", 0, 6, 1, "bananas", func(x): return str(int(x)))
 	s_smokes = _value_slider(v, "💨 Smoke bombs each", 0, 5, 1, "smokes", func(x): return str(int(x)))
 	s_pillows = _value_slider(v, "🛏 Pillows each", 0, 15, 1, "pillows", func(x): return str(int(x)))
-	s_xrays = _value_slider(v, "👁 X-Rays for the seeker", 0, 5, 1, "xrays", func(x): return str(int(x)))
+	s_xrays = _value_slider(v, "👁 X-Rays for the seeker", 0, 3, 1, "xrays", func(x): return str(int(x)))
 	v.add_child(_label("🤖 Bot skill", 22, MUTED))
 	var br := HBoxContainer.new()
 	br.add_theme_constant_override("separation", 8)
@@ -673,7 +673,7 @@ func _build_settings() -> void:
 		b.pressed.connect(_set_bot.bind(i))
 		br.add_child(b)
 		s_bot.append(b)
-	for tg in [["prints", "👣 Footprints for the seeker"], ["wiggle", "🌀 Disguises wiggle sometimes"], ["heat", "🌡 Hot/cold bar for the seeker"], ["halfping", "📡 Free radar at half time"]]:
+	for tg in [["prints", "👣 Footprints for the seeker"], ["heat", "🌡 Hot/cold bar for the seeker"], ["halfping", "📡 Free radar at half time"]]:
 		var tb := _btn("", Color("#9b8fa6"), Vector2(0, 50), 20)
 		tb.pressed.connect(_toggle_rule.bind(tg[0]))
 		tb.set_meta("label", tg[1])

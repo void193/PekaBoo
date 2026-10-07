@@ -35,7 +35,7 @@ var my_name := ""
 var my_char := 0
 var settings := {"music": 0.7, "sfx": 0.9, "sens": 1.0, "quality": 1, "server": "", "fps": false,
 	"hide": 45.0, "seek": 180.0, "bot": 1, "prints": true, "wiggle": true, "heat": true, "halfping": true,
-	"bananas": 2, "smokes": 2, "pillows": 5, "xrays": 3}
+	"bananas": 2, "smokes": 2, "pillows": 5, "xrays": 1}
 const RULE_KEYS := ["hide", "seek", "bot", "prints", "wiggle", "heat", "halfping", "bananas", "smokes", "pillows", "xrays"]
 var rules := {}  # the host's rules for the current round
 
@@ -479,9 +479,9 @@ func _load_cfg() -> void:
 	settings["outfits"] = cf.get_value("p", "outfits", {})
 	for k in RULE_KEYS:
 		settings[k] = cf.get_value("r", k, settings[k])
-	# X-ray got stronger: move people on the old default (2) to the new default (3) once
-	if int(cf.get_value("r", "rules_version", 1)) < 2 and int(settings["xrays"]) == 2:
-		settings["xrays"] = 3
+	# X-ray was too strong: one per round now (older saves had 2-3)
+	if int(cf.get_value("r", "rules_version", 1)) < 3:
+		settings["xrays"] = mini(int(settings["xrays"]), 1)
 	if bench_quality >= 0:
 		settings["quality"] = bench_quality
 	var saved := str(cf.get_value("s", "server", Net.DEFAULT_SERVER))
@@ -502,7 +502,7 @@ func _save_cfg() -> void:
 		cf.set_value("s", k, settings[k])
 	for k in RULE_KEYS:
 		cf.set_value("r", k, settings[k])
-	cf.set_value("r", "rules_version", 2)
+	cf.set_value("r", "rules_version", 3)
 	cf.save("user://settings.cfg")
 
 
@@ -939,7 +939,7 @@ func _restore_camera() -> void:
 func _reset_my_round() -> void:
 	me.reset_round_state()
 	var rr: Dictionary = rules if not rules.is_empty() else settings
-	uses = {"banana": int(rr["bananas"]), "cushion": 1, "lights": 1, "pillow": int(rr["pillows"]), "smoke": int(rr["smokes"]), "xray": int(rr.get("xrays", 3))}
+	uses = {"banana": int(rr["bananas"]), "cushion": 1, "lights": 1, "pillow": int(rr["pillows"]), "smoke": int(rr["smokes"]), "xray": int(rr.get("xrays", 1))}
 	cd.clear()
 	teases = 0
 	trail.clear()
@@ -1134,7 +1134,6 @@ func _on_start(m: Dictionary) -> void:
 	caught.clear()
 	_last_beep = -1
 	_half_ping = false
-	_wiggle_t = randf_range(20.0, 30.0)
 	_reset_my_round()
 	_restore_camera()
 	ui.show_play()
@@ -1716,8 +1715,8 @@ func _do_action(id: String) -> void:
 			cd["radar"] = 20.0
 			_radar()
 		"xray":
-			cd["xray"] = 45.0
-			uses["xray"] = uses.get("xray", 3) - 1
+			cd["xray"] = 60.0
+			uses["xray"] = uses.get("xray", 1) - 1
 			_fx({"k": "xray"})
 		"fart":
 			cd["fart"] = 6.0
@@ -2094,10 +2093,6 @@ func _on_fx(m: Dictionary, from: int) -> void:
 				if who is RemotePlayer:
 					(who as RemotePlayer).say("📯 HONK!")
 					(who as RemotePlayer).hop()
-				if me.global_position.distance_to(who_pos) < 5.0 and me.hide_spot < 0:
-					me.hop()
-					me.stun = maxf(me.stun, 0.4)
-					me.shake(0.4)
 		"dance":
 			Build.burst(self, who_pos, "notes")
 			_snd(mine, "dance", who_pos + Vector3.UP, 2.0)
@@ -2123,10 +2118,10 @@ func _on_fx(m: Dictionary, from: int) -> void:
 			if mine and me.role == "seeker":
 				for id in remotes:
 					var r: RemotePlayer = remotes[id]
-					if id != seeker_id and not caught.has(id) and r.global_position.distance_to(me.global_position) < 35.0:
-						r.xray(3.0, r.global_position.distance_to(me.global_position) < 10.0)
+					if id != seeker_id and not caught.has(id) and r.global_position.distance_to(me.global_position) < 20.0:
+						r.xray(2.0, xray_blur())
 			elif me.role == "hider" and phase == "seek":
-				ui.toast("👁")
+				ui.toast("👁 The seeker used X-Ray, sneak away!")
 		"radar":
 			Sfx.play_at("radar", who_pos + Vector3.UP, 2.0)
 			if not mine and me.role == "hider":
@@ -2325,7 +2320,6 @@ func _update_pillows(dt: float) -> void:
 			pillows.remove_at(i)
 
 
-var _wiggle_t := 30.0
 var _half_ping := false
 
 
@@ -2375,12 +2369,12 @@ func _seek_tick(dt: float) -> void:
 		if amt > 0.05 and _beat_t <= 0.0:
 			Sfx.play("heart", linear_to_db(0.4 + amt * 0.6))
 			_beat_t = lerpf(1.0, 0.4, amt)
-		# disguised hiders can't stay perfectly still forever
-		if me.disguise != "" and bool(rules.get("wiggle", true)):
-			_wiggle_t -= dt
-			if _wiggle_t <= 0.0:
-				_wiggle_t = randf_range(25.0, 35.0)
-				_fx({"k": "wiggle"})
+
+
+## Where the X-ray ring goes, relative to the hider: 2.5 to 4.5 m off in a random direction.
+static func xray_blur() -> Vector3:
+	var a := randf() * TAU
+	return Vector3(cos(a), 0.0, sin(a)) * randf_range(2.5, 4.5)
 
 
 func _footprint_short(p: Vector3) -> void:

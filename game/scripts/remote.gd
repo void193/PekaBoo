@@ -164,23 +164,23 @@ func dance() -> void:
 var _dot: Label3D
 
 
-## The seeker's X-ray: just a dot over where this hider is, seen through walls.
-## Red when close (within 10 m of the seeker), blue when far.
-func xray(t: float, close := false) -> void:
+## The seeker's X-ray: a blurry ring seen through walls, a few metres off from where this
+## hider really is, so it says "somewhere around here", never "exactly here".
+func xray(t: float, off := Vector3.ZERO) -> void:
 	if _dot == null:
 		_dot = Label3D.new()
-		_dot.text = "●"
+		_dot.text = "◯"
 		_dot.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		_dot.no_depth_test = true
 		_dot.fixed_size = true
 		_dot.pixel_size = 0.0011
-		_dot.font_size = 64
+		_dot.font_size = 150
 		_dot.outline_size = 10
 		_dot.outline_modulate = Color(1, 1, 1, 0.9)
 		_dot.render_priority = 10
-		_dot.position.y = 0.9
 		add_child(_dot)
-	_dot.modulate = Color("#ff3355") if close else Color("#3f8cff")
+	_dot.position = Vector3(off.x, 0.9, off.z)
+	_dot.modulate = Color(0.5, 0.75, 1.0, 0.55)
 	_dot.visible = true
 	_xray = t
 
@@ -216,7 +216,7 @@ func _process(dt: float) -> void:
 	if _xray > 0.0:
 		_xray -= dt
 		if _dot:
-			_dot.modulate.a = clampf(_xray * 2.0, 0.0, 1.0) * (0.8 + 0.2 * sin(_xray * 10.0))
+			_dot.modulate.a = clampf(_xray * 2.0, 0.0, 1.0) * (0.45 + 0.15 * sin(_xray * 10.0))
 		if _xray <= 0.0 and _dot:
 			_dot.visible = false
 	if _hop > 0.0:
