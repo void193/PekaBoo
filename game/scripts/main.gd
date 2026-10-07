@@ -62,6 +62,7 @@ var _hurry := false
 var _date_override := Vector2i.ZERO
 var _chill_args: PackedStringArray = []
 var _snap_out := ""
+var _menu_panel := ""
 
 
 ## Desktop preview of chill mode: --chillshot=x,y,z,yaw,pitch,dist,mode  (mode: look / kiss / hug / dance / sit / fw)
@@ -272,7 +273,7 @@ func _ready() -> void:
 ## compiled up front, instead of stuttering the first time you walk into a room.
 func _start_warmup() -> void:
 	_loading = ColorRect.new()
-	_loading.color = Color(0.35, 0.06, 0.56)
+	_loading.color = Color(0.992, 0.984, 0.937)
 	_loading.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var art := TextureRect.new()
 	art.texture = load("res://splash.png")
@@ -286,18 +287,19 @@ func _start_warmup() -> void:
 	# a thin line between the name and the peeking face
 	bar.anchor_left = 0.5
 	bar.anchor_right = 0.5
-	bar.anchor_top = 0.505
-	bar.anchor_bottom = 0.505
-	bar.offset_left = -130
-	bar.offset_right = 130
-	bar.offset_top = -3
-	bar.offset_bottom = 3
+	# a slim pink bar under the logo
+	bar.anchor_top = 0.9
+	bar.anchor_bottom = 0.9
+	bar.offset_left = -160
+	bar.offset_right = 160
+	bar.offset_top = -4
+	bar.offset_bottom = 4
 	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color(1, 1, 1, 0.18)
-	bg.set_corner_radius_all(3)
+	bg.bg_color = Color(0.1, 0.07, 0.14, 0.1)
+	bg.set_corner_radius_all(4)
 	var fill := StyleBoxFlat.new()
-	fill.bg_color = Color(1, 1, 1, 0.9)
-	fill.set_corner_radius_all(3)
+	fill.bg_color = Color("#ff2d6f")
+	fill.set_corner_radius_all(4)
 	bar.add_theme_stylebox_override("background", bg)
 	bar.add_theme_stylebox_override("fill", fill)
 	_loading.add_child(bar)
@@ -327,6 +329,16 @@ func _warm_tick() -> void:
 			if v.size() > 6:
 				me.enter_spot(int(v[6]), house.hide_spots[int(v[6])])
 				me.pitch = float(v[3])
+		elif auto == "shotmenu":
+			_to_menu("")
+			if _menu_panel == "play":
+				ui._show_menu_panel(ui.play_panel)
+			elif _menu_panel == "practice":
+				ui._show_menu_panel(ui.practice_panel)
+			await get_tree().create_timer(2.0).timeout
+			if _snap_out != "":
+				get_viewport().get_texture().get_image().save_png(_snap_out)
+				get_tree().quit()
 		elif auto == "shotchill":
 			_chill_shot()
 		elif auto == "shotfun" or auto == "shottv" or auto == "shottools":
@@ -433,6 +445,9 @@ func _parse_args() -> void:
 			auto_lan = true
 		elif a.begins_with("--codefile="):
 			auto_file = a.substr(11)
+		elif a.begins_with("--menushot"):
+			auto = "shotmenu"
+			_menu_panel = a.substr(11) if a.length() > 11 else ""
 		elif a.begins_with("--chillshot="):
 			auto = "shotchill"
 			_chill_args = a.substr(12).replace(":", ",").split(",")

@@ -256,111 +256,256 @@ func _build_menu() -> void:
 	menu = Control.new()
 	menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(menu)
-	# left half stays clear so the character preview shows behind it
-	var shade := ColorRect.new()
-	shade.color = Color(0.1, 0.06, 0.14, 0.25)
+	# the 3D house and your character stay visible on the left; a soft dusk gradient on the right
+	var g := Gradient.new()
+	g.offsets = PackedFloat32Array([0.0, 0.42, 1.0])
+	g.colors = PackedColorArray([Color(0.1, 0.05, 0.16, 0.0), Color(0.1, 0.05, 0.16, 0.08), Color(0.1, 0.05, 0.16, 0.72)])
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.width = 256
+	gt.height = 4
+	var shade := TextureRect.new()
+	shade.texture = gt
+	shade.stretch_mode = TextureRect.STRETCH_SCALE
+	shade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	menu.add_child(shade)
-	var side := Control.new()
-	side.set_anchors_preset(Control.PRESET_FULL_RECT)
-	side.anchor_left = 0.42
-	side.offset_left = 0
-	menu.add_child(side)
-	var v := _centered_scroll(side)
 
-	var title := _label("PekaBoo", 66, PINK)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(title)
-	var sub := _label("Hide & seek for two 💕", 22, MUTED)
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(sub)
+	# logo badge, top left
+	var badge := PanelContainer.new()
+	var bsb := _box(Color("#fdfbef"), 30, 10)
+	bsb.shadow_color = Color(0, 0, 0, 0.3)
+	bsb.shadow_size = 18
+	badge.add_theme_stylebox_override("panel", bsb)
+	badge.position = Vector2(30, 22)
+	menu.add_child(badge)
+	var logo := TextureRect.new()
+	logo.texture = load("res://assets/ui_logo.png")
+	logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	logo.custom_minimum_size = Vector2(300, 238)
+	logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge.add_child(logo)
+
+	# you: name + character + wardrobe, bottom left (your character stands right behind it)
+	var me_card := PanelContainer.new()
+	me_card.add_theme_stylebox_override("panel", _box(Color(0.12, 0.07, 0.18, 0.72), 24, 14))
+	me_card.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	me_card.position = Vector2(30, -170)
+	me_card.custom_minimum_size = Vector2(400, 0)
+	menu.add_child(me_card)
+	var mv := VBoxContainer.new()
+	mv.add_theme_constant_override("separation", 10)
+	me_card.add_child(mv)
 	name_edit = _edit("Your name", 14)
-	v.add_child(name_edit)
+	mv.add_child(name_edit)
 	var crow := HBoxContainer.new()
-	crow.add_theme_constant_override("separation", 10)
-	v.add_child(crow)
-	var prev := _btn("◀", PURPLE, Vector2(70, 60), 28)
+	crow.add_theme_constant_override("separation", 8)
+	mv.add_child(crow)
+	var prev := _btn("◀", PURPLE, Vector2(60, 56), 26)
 	prev.pressed.connect(func(): _cycle_char(-1))
 	crow.add_child(prev)
-	char_label = _label("", 24, INK)
+	char_label = _label("", 24, Color.WHITE)
 	char_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	char_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	char_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	crow.add_child(char_label)
-	var nxt := _btn("▶", PURPLE, Vector2(70, 60), 28)
+	var nxt := _btn("▶", PURPLE, Vector2(60, 56), 26)
 	nxt.pressed.connect(func(): _cycle_char(1))
 	crow.add_child(nxt)
-	var wb := _btn("👗", PINK, Vector2(70, 60), 28)
+	var wb := _btn("👗", PINK, Vector2(60, 56), 26)
 	wb.pressed.connect(open_wardrobe)
 	crow.add_child(wb)
 
-	# play together on a hotspot / Wi-Fi: one phone hosts, the other joins
-	var lan_row := HBoxContainer.new()
-	lan_row.add_theme_constant_override("separation", 10)
-	v.add_child(lan_row)
-	var host_b := _btn("📶 Host a game", PINK, Vector2(0, 76), 28)
-	host_b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	host_b.pressed.connect(func(): lan_host.emit(_name(), char_idx))
-	lan_row.add_child(host_b)
-	var find_b := _btn("🔎 Join a game", BLUE, Vector2(0, 76), 28)
-	find_b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	find_b.pressed.connect(func(): lan_find.emit(_name(), char_idx))
-	lan_row.add_child(find_b)
-	var lan_tip := _label("Same hotspot or Wi-Fi. No internet needed.", 18, MUTED)
-	lan_tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(lan_tip)
-	code_edit = _edit("Room code", 4)
-	v.add_child(code_edit)
-	var online_row := HBoxContainer.new()
-	online_row.add_theme_constant_override("separation", 10)
-	v.add_child(online_row)
-	var online_host := _btn("Host online", PINK, Vector2(0, 58), 24)
-	online_host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	online_host.pressed.connect(func(): create_room.emit(_name(), char_idx, settings["server"]))
-	online_row.add_child(online_host)
-	var online_join := _btn("Join online", BLUE, Vector2(0, 58), 24)
-	online_join.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	online_join.pressed.connect(func(): join_room.emit(code_edit.text.strip_edges().to_upper(), _name(), char_idx, settings["server"]))
-	online_row.add_child(online_join)
-	var bot_row := HBoxContainer.new()
-	bot_row.add_theme_constant_override("separation", 10)
-	v.add_child(bot_row)
-	var bl := _label("🤖 Practice:", 22, MUTED)
-	bl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	bot_row.add_child(bl)
-	var bh := _btn("🙈 I hide", ORANGE, Vector2(0, 58), 22)
-	bh.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bh.pressed.connect(func(): play_bot.emit(_name(), char_idx, "hide"))
-	bot_row.add_child(bh)
-	var bs := _btn("👀 I seek", ORANGE, Vector2(0, 58), 22)
-	bs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bs.pressed.connect(func(): play_bot.emit(_name(), char_idx, "seek"))
-	bot_row.add_child(bs)
-	var row2 := HBoxContainer.new()
-	row2.add_theme_constant_override("separation", 10)
-	v.add_child(row2)
-	var explore_b := _btn("Explore alone", PURPLE, Vector2(0, 58), 24)
-	explore_b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	explore_b.pressed.connect(func(): explore.emit(_name(), char_idx))
-	row2.add_child(explore_b)
-	var chill_b := _btn("🌙 Chill", Color("#5b3a8c"), Vector2(150, 58), 24)
-	chill_b.pressed.connect(func(): chill_solo.emit(_name(), char_idx))
-	row2.add_child(chill_b)
-	var set_b := _btn("⚙ Settings", Color("#6f6478"), Vector2(190, 58), 24)
-	set_b.pressed.connect(open_settings)
-	row2.add_child(set_b)
-	var by := _label("made with 💜 by RubinBastakoti", 15, MUTED)
-	by.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(by)
-	anniv_label = _label("", 19, Color("#8a5fb8"))
-	anniv_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(anniv_label)
-	status_label = _label("", 22, Color("#c0392b"))
+	# the big buttons, right side
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 14)
+	col.anchor_left = 1.0
+	col.anchor_right = 1.0
+	col.anchor_top = 0.5
+	col.anchor_bottom = 0.5
+	col.offset_left = -560
+	col.offset_right = -40
+	col.offset_top = -230
+	col.offset_bottom = 230
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	menu.add_child(col)
+	col.add_child(_menu_btn("👫", "PLAY TOGETHER", "Online, or on the same Wi-Fi / hotspot", PINK, Vector2(0, 112), func(): _show_menu_panel(play_panel)))
+	col.add_child(_menu_btn("🌙", "CHILL NIGHT", "Candles, stars and love songs", Color("#6a42a8"), Vector2(0, 96), func(): chill_solo.emit(_name(), char_idx)))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 14)
+	col.add_child(row)
+	var pr := _menu_btn("🤖", "PRACTICE", "Play with a bot", ORANGE, Vector2(0, 88), func(): _show_menu_panel(practice_panel))
+	pr.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(pr)
+	var ex := _menu_btn("🏠", "EXPLORE", "Walk around", BLUE, Vector2(0, 88), func(): explore.emit(_name(), char_idx))
+	ex.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(ex)
+	status_label = _label("", 20, Color("#ffb3b3"))
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	status_label.custom_minimum_size = Vector2(520, 0)
-	v.add_child(status_label)
+	_outlined(status_label, 8)
+	col.add_child(status_label)
+
+	# settings, top right
+	var gear := _icon_btn("⚙️", Color(0.12, 0.07, 0.18, 0.7), 64, 30)
+	gear.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	gear.position = Vector2(-90, 24)
+	gear.pressed.connect(open_settings)
+	menu.add_child(gear)
+
+	# credits + anniversary, bottom right
+	var foot := VBoxContainer.new()
+	foot.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	foot.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	foot.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	foot.position = Vector2(-40, -20)
+	foot.alignment = BoxContainer.ALIGNMENT_END
+	menu.add_child(foot)
+	anniv_label = _outlined(_label("", 19, Color("#ffd1ec")), 6)
+	anniv_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	foot.add_child(anniv_label)
+	var by := _outlined(_label("made with 💜 by RubinBastakoti  ·  v1.0", 15, Color(1, 1, 1, 0.8)), 5)
+	by.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	foot.add_child(by)
+
+	_build_play_panel()
+	_build_practice_panel()
+
+
+## A big title-screen button: emoji, a bold title and a short line under it.
+func _menu_btn(icon: String, title: String, sub: String, c: Color, size: Vector2, cb: Callable) -> Button:
+	var b := _btn("", c, size, 10, 26)
+	var st: StyleBoxFlat = b.get_theme_stylebox("normal").duplicate()
+	st.shadow_color = Color(0, 0, 0, 0.3)
+	st.shadow_size = 10
+	st.shadow_offset = Vector2(0, 4)
+	b.add_theme_stylebox_override("normal", st)
+	var h := HBoxContainer.new()
+	h.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	h.offset_left = 22
+	h.offset_right = -16
+	h.add_theme_constant_override("separation", 16)
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(h)
+	var ic := _label(icon, 42 if size.y > 90 else 34, Color.WHITE)
+	ic.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.add_child(ic)
+	var v := VBoxContainer.new()
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_theme_constant_override("separation", 0)
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	h.add_child(v)
+	var t := _label(title, 32 if size.y > 90 else 26, Color.WHITE)
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(t)
+	var sl := _label(sub, 17, Color(1, 1, 1, 0.85))
+	sl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(sl)
+	b.pressed.connect(cb)
+	return b
+
+
+var play_panel: Control
+var practice_panel: Control
+
+
+func _menu_modal(title: String) -> Array:
+	var holder := Control.new()
+	holder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	holder.visible = false
+	menu.add_child(holder)
+	var dim := ColorRect.new()
+	dim.color = Color(0.08, 0.04, 0.12, 0.6)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	holder.add_child(dim)
+	var c := CenterContainer.new()
+	c.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	holder.add_child(c)
+	var card := _card(CREAM)
+	c.add_child(card)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 14)
+	card.add_child(v)
+	var top := HBoxContainer.new()
+	v.add_child(top)
+	var t := _label(title, 34, INK)
+	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(t)
+	var x := _btn("✕", MUTED, Vector2(52, 52), 24)
+	x.pressed.connect(func(): holder.visible = false)
+	top.add_child(x)
+	return [holder, v]
+
+
+func _build_play_panel() -> void:
+	var m := _menu_modal("👫 Play together")
+	play_panel = m[0]
+	var v: VBoxContainer = m[1]
+	var cols := HBoxContainer.new()
+	cols.add_theme_constant_override("separation", 18)
+	v.add_child(cols)
+	# online
+	var on := VBoxContainer.new()
+	on.add_theme_constant_override("separation", 10)
+	on.custom_minimum_size = Vector2(330, 0)
+	cols.add_child(on)
+	on.add_child(_label("🌐 Online", 26, INK))
+	var ot := _label("From anywhere: send your partner the room code.", 17, MUTED)
+	ot.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	on.add_child(ot)
+	var host_on := _btn("✨ Create a room", PINK, Vector2(0, 64), 24)
+	host_on.pressed.connect(func(): play_panel.visible = false; create_room.emit(_name(), char_idx, settings["server"]))
+	on.add_child(host_on)
+	var jr := HBoxContainer.new()
+	jr.add_theme_constant_override("separation", 8)
+	on.add_child(jr)
+	code_edit = _edit("CODE", 4)
+	code_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	jr.add_child(code_edit)
+	var join_on := _btn("Join", BLUE, Vector2(110, 64), 24)
+	join_on.pressed.connect(func(): play_panel.visible = false; join_room.emit(code_edit.text.strip_edges().to_upper(), _name(), char_idx, settings["server"]))
+	jr.add_child(join_on)
+	var sep := VSeparator.new()
+	cols.add_child(sep)
+	# nearby
+	var nb := VBoxContainer.new()
+	nb.add_theme_constant_override("separation", 10)
+	nb.custom_minimum_size = Vector2(330, 0)
+	cols.add_child(nb)
+	nb.add_child(_label("📶 Same Wi-Fi / hotspot", 26, INK))
+	var nt := _label("No internet needed. Fastest when you're together.", 17, MUTED)
+	nt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	nb.add_child(nt)
+	var host_b := _btn("📶 Host a game", PINK, Vector2(0, 64), 24)
+	host_b.pressed.connect(func(): play_panel.visible = false; lan_host.emit(_name(), char_idx))
+	nb.add_child(host_b)
+	var find_b := _btn("🔎 Find a game", BLUE, Vector2(0, 64), 24)
+	find_b.pressed.connect(func(): play_panel.visible = false; lan_find.emit(_name(), char_idx))
+	nb.add_child(find_b)
+
+
+func _build_practice_panel() -> void:
+	var m := _menu_modal("🤖 Practice with a bot")
+	practice_panel = m[0]
+	var v: VBoxContainer = m[1]
+	var r := HBoxContainer.new()
+	r.add_theme_constant_override("separation", 14)
+	v.add_child(r)
+	var bh := _btn("🙈  I hide", ORANGE, Vector2(260, 84), 28)
+	bh.pressed.connect(func(): practice_panel.visible = false; play_bot.emit(_name(), char_idx, "hide"))
+	r.add_child(bh)
+	var bs := _btn("👀  I seek", ORANGE, Vector2(260, 84), 28)
+	bs.pressed.connect(func(): practice_panel.visible = false; play_bot.emit(_name(), char_idx, "seek"))
+	r.add_child(bs)
+
+
+func _show_menu_panel(p: Control) -> void:
+	play_panel.visible = p == play_panel
+	practice_panel.visible = p == practice_panel
 
 
 # ---------- "nearby games" panel ----------
@@ -453,7 +598,9 @@ func show_menu(pname: String, idx: int, status := "") -> void:
 	char_idx = idx
 	_update_char_label()
 	status_label.text = status
-	status_label.add_theme_color_override("font_color", Color("#c0392b"))
+	status_label.add_theme_color_override("font_color", Color("#ffb3b3"))
+	play_panel.visible = false
+	practice_panel.visible = false
 	menu.visible = true
 	lobby.visible = false
 	hud.visible = false
@@ -462,7 +609,7 @@ func show_menu(pname: String, idx: int, status := "") -> void:
 
 func set_status(text: String, ok := false) -> void:
 	status_label.text = text
-	status_label.add_theme_color_override("font_color", GREEN if ok else Color("#c0392b"))
+	status_label.add_theme_color_override("font_color", Color("#b8ffcf") if ok else Color("#ffb3b3"))
 
 
 # ---------- settings ----------
