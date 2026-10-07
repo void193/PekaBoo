@@ -165,6 +165,7 @@ var auto_lan := false
 var bench_quality := -1
 var _bench := {"i": -1, "t": 0.0, "frames": 0, "draws": 0, "results": []}
 var _fps_log_t := 0.0
+var _bench_chill := false  # --chillbench: the same bench views, in chill mode at night
 var _warm_i := 0
 var _exp_nolights := false
 var _exp_nochar := false
@@ -247,6 +248,8 @@ func _ready() -> void:
 		var qa: Node = load("res://scripts/qa.gd").new()
 		add_child(qa)
 		qa.call_deferred("run")
+	elif auto == "bench" and _bench_chill:
+		_on_chill_solo("Bench", my_char)
 	elif auto == "bench":
 		_on_explore("Bench", my_char)
 		if _exp_nochar:
@@ -419,6 +422,9 @@ func _parse_args() -> void:
 	for a in args:
 		if a == "--bench":
 			auto = "bench"
+		elif a == "--chillbench":
+			auto = "bench"
+			_bench_chill = true
 		elif a == "--nolights":
 			_exp_nolights = true
 		elif a.begins_with("--scale="):
