@@ -276,8 +276,12 @@ func _build_menu() -> void:
 	logo.texture = load("res://assets/ui_logo.png")
 	logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	logo.position = Vector2(18, 10)
-	logo.size = Vector2(350, 280)
+	logo.position = Vector2(22, 14)
+	logo.size = Vector2(380, 286)
+	logo.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	var logo_mat := ShaderMaterial.new()
+	logo_mat.shader = load("res://assets/menu_logo.gdshader")
+	logo.material = logo_mat
 	logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	menu.add_child(logo)
 	_menu_parts.append(logo)
