@@ -16,3 +16,6 @@ assets-src/
 
 # the public download page is its own repo
 download-page/
+
+# installed by npm on the server
+relay/node_modules/

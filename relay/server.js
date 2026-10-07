@@ -22,10 +22,18 @@ const send = (ws, m) => { if (ws.readyState === 1) ws.send(JSON.stringify(m)); }
 const list = room => [...room.players].map(([id, p]) => ({ id, name: p.name, color: p.color }));
 function bcast(room, m, except) {
   const out = JSON.stringify(m);
-  for (const [id, p] of room.players) if (id !== except && p.ws.readyState === 1) p.ws.send(out);
+  const isState = m.t === 'st';
+  for (const [id, p] of room.players) {
+    if (id === except || p.ws.readyState !== 1) continue;
+    // a player who has fallen behind only needs the newest positions, not a backlog
+    if (isState && p.ws.bufferedAmount > 32 * 1024) continue;
+    p.ws.send(out);
+  }
 }
 
-wss.on('connection', ws => {
+wss.on('connection', (ws, req) => {
+  // send each small message straight away (no Nagle bundling) - keeps the ping low
+  if (req.socket && req.socket.setNoDelay) req.socket.setNoDelay(true);
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
   let room = null, id = 0;
@@ -85,4 +93,4 @@ setInterval(() => {
   }
 }, 25000);
 
-server.listen(PORT, () => console.log(`Peekaboo House relay listening on ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => console.log(`PekaBoo relay listening on ${PORT}`));

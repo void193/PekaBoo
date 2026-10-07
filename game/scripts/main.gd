@@ -465,9 +465,11 @@ func _load_cfg() -> void:
 		settings["xrays"] = 3
 	if bench_quality >= 0:
 		settings["quality"] = bench_quality
-	settings["server"] = override if override != "" else str(cf.get_value("s", "server", Net.DEFAULT_SERVER))
-	if settings["server"] == "":
-		settings["server"] = Net.DEFAULT_SERVER
+	var saved := str(cf.get_value("s", "server", Net.DEFAULT_SERVER))
+	# old builds saved the local test address; move them to the online default
+	if saved == "" or saved.contains("127.0.0.1"):
+		saved = Net.DEFAULT_SERVER
+	settings["server"] = override if override != "" else saved
 
 
 func _save_cfg() -> void:
@@ -528,7 +530,14 @@ func _apply_profile(pname: String, idx: int, server := "") -> void:
 
 # ---------- menu flow ----------
 
+var _woke := false
+
+
 func _to_menu(status: String) -> void:
+	if not _woke and auto == "":
+		_woke = true
+		Net.server_url = settings["server"]
+		Net.wake_server()
 	_leave_chill()
 	phase = "menu"
 	if bot != null:

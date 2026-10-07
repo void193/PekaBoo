@@ -4,7 +4,10 @@ extends Node
 signal message(m: Dictionary)
 signal disconnected(reason: String)
 
-const DEFAULT_SERVER := "ws://3.109.56.218:8787"
+## Online servers. Render (Singapore) is the default; the Mumbai VPS is usually a little faster from Nepal.
+const RENDER_SERVER := "wss://pekaboo-relay.onrender.com"
+const VPS_SERVER := "ws://3.109.56.218:8787"
+const DEFAULT_SERVER := RENDER_SERVER
 
 var server_url := DEFAULT_SERVER
 var ws: WebSocketPeer
@@ -60,6 +63,23 @@ func open(first: Dictionary) -> void:
 		disconnected.emit("Couldn't reach the server. Check the address in Server settings.")
 		return
 	state = "connecting"
+
+
+var _waker: HTTPRequest
+
+
+## Render's free plan sleeps when nobody plays for a while. Poke it as soon as the game opens,
+## so it's awake by the time you tap Host online / Join online.
+func wake_server() -> void:
+	if not server_url.begins_with("wss://") and not server_url.begins_with("ws://"):
+		return
+	if _waker == null:
+		_waker = HTTPRequest.new()
+		_waker.timeout = 90.0
+		add_child(_waker)
+	var http := server_url.replace("wss://", "https://").replace("ws://", "http://")
+	_waker.cancel_request()
+	_waker.request(http)
 
 
 func close() -> void:

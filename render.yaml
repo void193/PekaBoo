@@ -1,0 +1,13 @@
+# Render Blueprint: the PekaBoo online relay (WebSocket), in Singapore - the closest Render region to Nepal.
+# In Render: New + -> Blueprint -> pick this repo -> Apply.
+services:
+  - type: web
+    name: pekaboo-relay
+    runtime: node
+    region: singapore
+    plan: free
+    rootDir: relay
+    buildCommand: npm install --omit=dev
+    startCommand: node server.js
+    healthCheckPath: /
+    autoDeploy: true

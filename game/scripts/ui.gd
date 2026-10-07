@@ -528,7 +528,21 @@ func _build_settings() -> void:
 	fps_btn = _btn("Show FPS: off", Color("#9b8fa6"), Vector2(0, 50), 20)
 	fps_btn.pressed.connect(func(): settings["fps"] = not settings.get("fps", false); _refresh_fps_btn(); settings_changed.emit(settings))
 	v.add_child(fps_btn)
-	v.add_child(_label("🌐 Server address (both phones must use the same)", 20, MUTED))
+	v.add_child(_label("🌐 Online server (both of you must use the same)", 20, MUTED))
+	var srow := HBoxContainer.new()
+	srow.add_theme_constant_override("separation", 8)
+	v.add_child(srow)
+	for opt in [["☁️ Render (Singapore)", Net.RENDER_SERVER], ["🖥 VPS (Mumbai)", Net.VPS_SERVER]]:
+		var sb := _btn(opt[0], BLUE, Vector2(0, 50), 18)
+		sb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var url: String = opt[1]
+		sb.pressed.connect(func():
+			s_server.text = url
+			settings["server"] = url
+			settings_changed.emit(settings)
+			Net.server_url = url
+			Net.wake_server())
+		srow.add_child(sb)
 	s_server = _edit("wss://...", 200)
 	s_server.add_theme_font_size_override("font_size", 20)
 	s_server.text_changed.connect(func(tx): settings["server"] = tx.strip_edges(); settings_changed.emit(settings))
