@@ -65,6 +65,8 @@ var _snap_out := ""
 var _menu_panel := ""
 var _shot_names := PackedStringArray()  # --names=Rubin:Babita (screenshots / trailer)
 var _shot_nohud := false
+var _show_spot := 13
+var _show_t := 0.0
 var _shot_pair := PackedStringArray()   # --pair=1,2 (my character, partner's character)
 
 
@@ -286,7 +288,7 @@ func _ready() -> void:
 	elif auto == "shotset":
 		ui.open_settings()
 	elif auto == "shot":
-		_shot_args = auto_file.split(",")
+		_shot_args = auto_file.replace(":", ",").split(",")
 	elif auto != "":
 		_log("autotest " + auto + " server=" + Net.server_url)
 
@@ -482,6 +484,11 @@ func _parse_args() -> void:
 		elif a.begins_with("--chillshot="):
 			auto = "shotchill"
 			_chill_args = a.substr(12).replace(":", ",").split(",")
+		elif a.begins_with("--show="):
+			# --show=hide:13  (you hide in spot 13 and the bot hunts you)  /  --show=seek  (you seek, tools demo)
+			var sp := a.substr(7).split(":")
+			auto = "botshow" + sp[0]
+			_show_spot = int(sp[1]) if sp.size() > 1 else 13
 		elif a == "--nohud":
 			_shot_nohud = true
 		elif a.begins_with("--names="):
@@ -2591,6 +2598,23 @@ func _bot_catch_stress() -> void:
 
 
 func _bot_autotest() -> void:
+	if auto == "botshowhide" or auto == "botshowseek":
+		var hiding := auto == "botshowhide"
+		if phase == "menu" and auto_t > 0.5 and bot == null:
+			hide_time = 5.0 if hiding else 1.0
+			seek_time = 600.0
+			_on_play_bot(my_name if my_name != "" else "Rubin", my_char, "hide" if hiding else "seek")
+		elif hiding and phase == "hide" and not auto_done:
+			auto_done = true
+			me.enter_spot(_show_spot, house.hide_spots[_show_spot])
+		elif not hiding and phase == "seek":
+			_show_t += get_process_delta_time()
+			if _show_t > 6.0 and not auto_done:
+				auto_done = true
+				_do_action("radar")
+		if _shot_nohud:
+			ui.hud.visible = false
+		return
 	if auto == "botxray":
 		if phase == "menu" and auto_t > 0.5 and bot == null:
 			hide_time = 1.0
