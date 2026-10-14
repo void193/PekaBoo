@@ -63,16 +63,30 @@ var _date_override := Vector2i.ZERO
 var _chill_args: PackedStringArray = []
 var _snap_out := ""
 var _menu_panel := ""
+var _shot_names := PackedStringArray()  # --names=Rubin:Babita (screenshots / trailer)
+var _shot_nohud := false
+var _shot_pair := PackedStringArray()   # --pair=1,2 (my character, partner's character)
 
 
 ## Desktop preview of chill mode: --chillshot=x,y,z,yaw,pitch,dist,mode  (mode: look / kiss / hug / dance / sit / fw)
 func _chill_shot() -> void:
 	var v := _chill_args
-	_on_chill_solo("Lumi", my_char)
+	_on_chill_solo(my_name if _shot_names.size() > 0 else "Lumi", my_char)
 	# a stand-in partner that moves itself like a real player would
 	var her := Player.new()
 	add_child(her)
-	her.setup(5, house)
+	her.setup(clampi(int(_shot_pair[1]), 0, Kit.CHARS.size() - 1) if _shot_pair.size() > 1 else 5, house)
+	if _shot_names.size() > 1:
+		var tag := Label3D.new()
+		tag.text = _shot_names[1]
+		tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		tag.no_depth_test = true
+		tag.fixed_size = true
+		tag.pixel_size = 0.0009
+		tag.font_size = 48
+		tag.outline_size = 10
+		tag.position.y = 1.55
+		her.add_child(tag)
 	remotes[99] = her
 	her.cam.queue_free()
 	her.cam = Camera3D.new()
@@ -141,6 +155,8 @@ func _chill_shot() -> void:
 		"lantern":
 			for k in 4:
 				chill.lantern(at + Vector3(k * 0.7 - 1.0, -1.0 - k * 1.2, 1.0 + k))
+	if _shot_nohud:
+		ui.hud.visible = false
 	if v.size() > 8:
 		# measuring: hide one kind of effect (fireflies / halos / sky)
 		for c in chill._decor.get_children():
@@ -265,7 +281,7 @@ func _ready() -> void:
 		if _exp_plainfont:
 			ui.root.theme.default_font = null
 	elif auto == "shotfun":
-		_on_explore("Lumi", my_char)
+		_on_explore(my_name if _shot_names.size() > 0 else "Lumi", my_char)
 		me.teleport(Vector3(8.5, 0.1, 13.5), 0.0)
 	elif auto == "shotset":
 		ui.open_settings()
@@ -327,7 +343,7 @@ func _warm_tick() -> void:
 			_to_menu("")
 		elif auto == "shot":
 			var v := _shot_args
-			_on_explore("Lumi", my_char)
+			_on_explore(my_name if _shot_names.size() > 0 else "Lumi", my_char)
 			me.teleport(Vector3(float(v[0]), float(v[4]) if v.size() > 4 else 0.1, float(v[1])), float(v[2]))
 			me.pitch = float(v[3]) if v.size() > 3 else -0.25
 			if v.size() > 5:
@@ -335,6 +351,8 @@ func _warm_tick() -> void:
 			if v.size() > 6:
 				me.enter_spot(int(v[6]), house.hide_spots[int(v[6])])
 				me.pitch = float(v[3])
+			if _shot_nohud:
+				ui.hud.visible = false
 		elif auto == "shotmenu":
 			_to_menu("")
 			if _menu_panel == "play":
@@ -351,7 +369,7 @@ func _warm_tick() -> void:
 		elif auto == "shotchill":
 			_chill_shot()
 		elif auto == "shotfun" or auto == "shottv" or auto == "shottools":
-			_on_explore("Lumi", my_char)
+			_on_explore(my_name if _shot_names.size() > 0 else "Lumi", my_char)
 			me.teleport(Vector3(8.5, 0.1, 13.5), 0.0)
 			ui.fun_card.visible = auto == "shotfun"
 			ui.tools_card.visible = auto == "shottools"
@@ -464,6 +482,12 @@ func _parse_args() -> void:
 		elif a.begins_with("--chillshot="):
 			auto = "shotchill"
 			_chill_args = a.substr(12).replace(":", ",").split(",")
+		elif a == "--nohud":
+			_shot_nohud = true
+		elif a.begins_with("--names="):
+			_shot_names = a.substr(8).replace(",", ":").split(":")
+		elif a.begins_with("--pair="):
+			_shot_pair = a.substr(7).replace(":", ",").split(",")
 		elif a.begins_with("--snapout="):
 			_snap_out = a.substr(10)
 		elif a == "--shotfun" or a == "--shotset" or a == "--shottv" or a == "--shottools":
@@ -478,6 +502,10 @@ func _load_cfg() -> void:
 	cf.load("user://settings.cfg")
 	my_name = cf.get_value("p", "name", "")
 	my_char = clampi(int(cf.get_value("p", "char", randi() % Kit.CHARS.size())), 0, Kit.CHARS.size() - 1)
+	if _shot_names.size() > 0:
+		my_name = _shot_names[0]
+	if _shot_pair.size() > 0:
+		my_char = clampi(int(_shot_pair[0]), 0, Kit.CHARS.size() - 1)
 	var override: String = settings["server"]
 	settings["music"] = float(cf.get_value("s", "music", 0.7))
 	settings["sfx"] = float(cf.get_value("s", "sfx", 0.9))
