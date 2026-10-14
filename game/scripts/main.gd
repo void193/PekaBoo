@@ -35,7 +35,7 @@ var my_name := ""
 var my_char := 0
 var settings := {"music": 0.7, "sfx": 0.9, "sens": 1.0, "quality": 1, "server": "", "fps": false,
 	"hide": 45.0, "seek": 180.0, "bot": 1, "prints": true, "wiggle": true, "heat": true, "halfping": true,
-	"bananas": 2, "smokes": 2, "pillows": 5, "xrays": 1}
+	"bananas": 2, "smokes": 2, "pillows": 5, "xrays": 1, "anniv_m": 2, "anniv_d": 2}
 const RULE_KEYS := ["hide", "seek", "bot", "prints", "wiggle", "heat", "halfping", "bananas", "smokes", "pillows", "xrays"]
 var rules := {}  # the host's rules for the current round
 
@@ -66,6 +66,7 @@ var _menu_panel := ""
 var _shot_names := PackedStringArray()  # --names=Rubin:Babita (screenshots / trailer)
 var _shot_nohud := false
 var _show_spot := 13
+var _shot_spin := 0.0   # --spin=0.15: the camera turns slowly (background videos)
 var _show_t := 0.0
 var _shot_pair := PackedStringArray()   # --pair=1,2 (my character, partner's character)
 
@@ -120,6 +121,10 @@ func _chill_shot() -> void:
 				oc.look_at(ctr)
 				oc.make_current()
 				ui.hud.visible = false
+		"wall":
+			# a clean view of a picture frame: nobody in the way
+			me.visual.visible = false
+			her.visible = false
 		"groove":
 			me.dance()
 		"top":
@@ -252,6 +257,8 @@ func _ready() -> void:
 	ui.leave.connect(_leave)
 	ui.action.connect(_do_action)
 	ui.settings_changed.connect(_on_settings)
+	ui.memories_allow.connect(_on_memories_allow)
+	ui.memories_reload.connect(_on_memories_reload)
 	ui.round_options.connect(_on_round_options)
 	Net.message.connect(_on_net)
 	Net.disconnected.connect(_on_disconnected)
@@ -355,12 +362,18 @@ func _warm_tick() -> void:
 				me.pitch = float(v[3])
 			if _shot_nohud:
 				ui.hud.visible = false
+			if "--hideme" in OS.get_cmdline_args() + OS.get_cmdline_user_args():
+				me.visual.visible = false
+			if "--tvon" in OS.get_cmdline_args() + OS.get_cmdline_user_args():
+				house.set_tv(true, 0)
 		elif auto == "shotmenu":
 			_to_menu("")
 			if _menu_panel == "play":
 				ui._show_menu_panel(ui.play_panel)
 			elif _menu_panel == "practice":
 				ui._show_menu_panel(ui.practice_panel)
+			elif _menu_panel == "settings":
+				ui.open_settings()
 			elif _menu_panel == "ward":
 				ui.open_wardrobe()
 				_on_outfit({"top": Color("#ff94c4"), "acc": "crown"})
@@ -489,6 +502,8 @@ func _parse_args() -> void:
 			var sp := a.substr(7).split(":")
 			auto = "botshow" + sp[0]
 			_show_spot = int(sp[1]) if sp.size() > 1 else 13
+		elif a.begins_with("--spin="):
+			_shot_spin = float(a.substr(7))
 		elif a == "--nohud":
 			_shot_nohud = true
 		elif a.begins_with("--names="):
@@ -520,6 +535,8 @@ func _load_cfg() -> void:
 	settings["quality"] = int(cf.get_value("s", "quality", 1 if is_touch else 2))
 	settings["fps"] = bool(cf.get_value("s", "fps", false))
 	settings["music_on"] = bool(cf.get_value("s", "music_on", true))
+	settings["anniv_m"] = clampi(int(cf.get_value("s", "anniv_m", 2)), 1, 12)
+	settings["anniv_d"] = clampi(int(cf.get_value("s", "anniv_d", 2)), 1, 31)
 	settings["outfits"] = cf.get_value("p", "outfits", {})
 	for k in RULE_KEYS:
 		settings[k] = cf.get_value("r", k, settings[k])
@@ -542,7 +559,7 @@ func _save_cfg() -> void:
 	cf.set_value("p", "name", my_name)
 	cf.set_value("p", "char", my_char)
 	cf.set_value("p", "outfits", settings.get("outfits", {}))
-	for k in ["music", "sfx", "sens", "quality", "server", "fps", "music_on"]:
+	for k in ["music", "sfx", "sens", "quality", "server", "fps", "music_on", "anniv_m", "anniv_d"]:
 		cf.set_value("s", k, settings[k])
 	for k in RULE_KEYS:
 		cf.set_value("r", k, settings[k])
@@ -550,10 +567,34 @@ func _save_cfg() -> void:
 	cf.save("user://settings.cfg")
 
 
+func _on_memories_allow() -> void:
+	if OS.get_name() == "Android":
+		OS.request_permissions()
+	await get_tree().create_timer(1.5).timeout
+	_on_memories_reload()
+
+
+func _on_memories_reload() -> void:
+	house.reload_custom()
+	ui.memo_label.text = "%s\n📁 %s\n🎬 %s" % [house.custom_summary(), Custom.photo_dir(), Custom.tv_dir()]
+	_refresh_anniversary_label()
+
+
+func _refresh_anniversary_label() -> void:
+	if ui.anniv_label == null:
+		return
+	if _is_anniversary():
+		ui.anniv_label.text = "💜 Happy Anniversary, you two 💜"
+	else:
+		var dd := _days_to_anniversary()
+		ui.anniv_label.text = "💜 %d day%s to our anniversary" % [dd, "" if dd == 1 else "s"]
+
+
 func _on_settings(s: Dictionary) -> void:
 	settings = s.duplicate()
 	_apply_settings()
 	_save_cfg()
+	_refresh_anniversary_label()
 
 
 func _apply_settings() -> void:
@@ -829,7 +870,7 @@ func _partner_id() -> int:
 
 func _is_anniversary() -> bool:
 	var d := _today()
-	return d.x == 2 and d.y == 2
+	return d.x == int(settings.get("anniv_m", 2)) and d.y == int(settings.get("anniv_d", 2))
 
 
 func _today() -> Vector2i:
@@ -845,7 +886,7 @@ func _days_to_anniversary() -> int:
 	if _date_override != Vector2i.ZERO:
 		today = Time.get_unix_time_from_datetime_dict({"year": d["year"], "month": _date_override.x, "day": _date_override.y, "hour": 12, "minute": 0, "second": 0})
 	for yy in [int(d["year"]), int(d["year"]) + 1]:
-		var t := Time.get_unix_time_from_datetime_dict({"year": yy, "month": 2, "day": 2, "hour": 12, "minute": 0, "second": 0})
+		var t := Time.get_unix_time_from_datetime_dict({"year": yy, "month": int(settings.get("anniv_m", 2)), "day": mini(int(settings.get("anniv_d", 2)), 28 if int(settings.get("anniv_m", 2)) == 2 else 30), "hour": 12, "minute": 0, "second": 0})
 		if t >= today:
 			return roundi((t - today) / 86400.0)
 	return 0
@@ -2763,6 +2804,8 @@ func _sync_test(dt: float) -> void:
 
 func _autotest(dt: float) -> void:
 	auto_t += dt
+	if _shot_spin != 0.0 and auto == "shot" and me != null:
+		me.yaw += _shot_spin * dt
 	if auto.begins_with("bot"):
 		_bot_autotest()
 		return

@@ -20,6 +20,8 @@ signal next_round
 signal back_to_lobby
 signal action(id: String)
 signal settings_changed(s: Dictionary)
+signal memories_allow
+signal memories_reload
 signal round_options(hide_time: float, seek_time: float)
 
 const PINK := Color("#ff4f86")
@@ -34,13 +36,16 @@ const GLASS := Color(0.12, 0.08, 0.16, 0.62)
 
 var settings := {"music": 0.7, "sfx": 0.9, "sens": 1.0, "quality": 1, "server": "", "fps": false,
 	"hide": 45.0, "seek": 180.0, "bot": 1, "prints": true, "wiggle": true, "heat": true, "halfping": true,
-	"bananas": 2, "smokes": 2, "pillows": 5, "xrays": 1}
+	"bananas": 2, "smokes": 2, "pillows": 5, "xrays": 1, "anniv_m": 2, "anniv_d": 2}
 var s_hide: HSlider
 var s_seek: HSlider
 var s_bananas: HSlider
 var s_smokes: HSlider
 var s_pillows: HSlider
 var s_xrays: HSlider
+var s_am: HSlider
+var s_ad: HSlider
+var memo_label: Label
 var s_bot: Array[Button] = []
 var s_toggles := {}
 var char_idx := 0
@@ -643,6 +648,29 @@ func _build_settings() -> void:
 	s_music = _slider(v, "🎵 Music volume", 0.0, 1.0)
 	s_sfx = _slider(v, "🔊 Sound effects", 0.0, 1.0)
 	s_sens = _slider(v, "👆 Look sensitivity", 0.3, 2.5)
+	v.add_child(_label("💜 Make it ours", 24, PINK))
+	const MONTHS := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+	s_am = _value_slider(v, "📅 Our anniversary: month", 1, 12, 1, "anniv_m", func(x): return MONTHS[clampi(int(x) - 1, 0, 11)])
+	s_ad = _value_slider(v, "📅 Our anniversary: day", 1, 31, 1, "anniv_d", func(x): return str(int(x)))
+	var mh := _label("📷 Your own pictures hang in the frames and your own clips play on the TV. Put photos (jpg / png) in the Pictures → PekaBoo folder, and TV videos (.ogv) in Movies → PekaBoo.", 18, MUTED)
+	mh.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	mh.custom_minimum_size = Vector2(520, 0)
+	v.add_child(mh)
+	memo_label = _label("", 18, INK)
+	memo_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	memo_label.custom_minimum_size = Vector2(520, 0)
+	v.add_child(memo_label)
+	var mrow := HBoxContainer.new()
+	mrow.add_theme_constant_override("separation", 8)
+	v.add_child(mrow)
+	var allow := _btn("🔓 Allow access to photos", BLUE, Vector2(0, 50), 18)
+	allow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	allow.pressed.connect(func(): memories_allow.emit())
+	mrow.add_child(allow)
+	var reload := _btn("🔄 Reload", PINK, Vector2(0, 50), 18)
+	reload.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	reload.pressed.connect(func(): memories_reload.emit())
+	mrow.add_child(reload)
 	v.add_child(_label("✨ Graphics", 22, MUTED))
 	var q := HBoxContainer.new()
 	q.add_theme_constant_override("separation", 8)
@@ -809,7 +837,7 @@ func apply_settings(s: Dictionary) -> void:
 	s_sfx.set_value_no_signal(s["sfx"])
 	s_sens.set_value_no_signal(s["sens"])
 	s_server.text = s["server"]
-	for pair in [[s_hide, "hide"], [s_seek, "seek"], [s_bananas, "bananas"], [s_smokes, "smokes"], [s_pillows, "pillows"], [s_xrays, "xrays"]]:
+	for pair in [[s_hide, "hide"], [s_seek, "seek"], [s_bananas, "bananas"], [s_smokes, "smokes"], [s_pillows, "pillows"], [s_xrays, "xrays"], [s_am, "anniv_m"], [s_ad, "anniv_d"]]:
 		var sl: HSlider = pair[0]
 		sl.set_value_no_signal(float(s.get(pair[1], sl.min_value)))
 		(sl.get_meta("val") as Label).text = (sl.get_meta("fmt") as Callable).call(sl.value)
@@ -820,6 +848,7 @@ func apply_settings(s: Dictionary) -> void:
 
 func open_settings() -> void:
 	settings_panel.visible = true
+	memories_reload.emit()
 
 
 # ---------- lobby ----------

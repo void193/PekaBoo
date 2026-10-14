@@ -139,6 +139,7 @@ func _ready() -> void:
 	_furnish_ground()
 	_furnish_upper()
 	_hang_photos()
+	reload_custom()
 	_room_lights()
 	randomize()
 	_setup_navigation()
@@ -1906,6 +1907,7 @@ func _photo(file: String, center: Vector3, n: Vector3, height: float, frame_col 
 	var holder := Node3D.new()
 	holder.transform = Transform3D(Basis.looking_at(-n, Vector3.UP), center + n * 0.012)
 	add_child(holder)
+	_frame_specs.append({"xf": holder.transform, "pw": pw, "ph": ph})
 	var ow := pw + 2.0 * (mat_border + frame_w)
 	var oh := ph + 2.0 * (mat_border + frame_w)
 	# frame bars
@@ -1926,6 +1928,81 @@ func _photo(file: String, center: Vector3, n: Vector3, height: float, frame_col 
 	mi.material_override = m
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	holder.add_child(mi)
+
+
+# ---------- your own pictures in the frames ----------
+
+var _frame_specs: Array = []     # [{xf, pw, ph}] for each framed photo that was hung
+var _custom_nodes: Array = []
+var _custom_mats: Array = []     # [material, world position] so the pictures get the night light too
+var custom_photo_count := 0
+var custom_video_count := 0
+var _tint_key := ""
+
+
+## (Re)loads the couple's own pictures from Pictures/PekaBoo and lays them over the frames.
+func reload_custom() -> void:
+	for n in _custom_nodes:
+		if is_instance_valid(n):
+			n.queue_free()
+	_custom_nodes.clear()
+	_custom_mats.clear()
+	var files := Custom.photos()
+	custom_photo_count = 0
+	for i in files.size():
+		if custom_photo_count >= _frame_specs.size():
+			break
+		var tex := Custom.load_photo(files[i])
+		if tex == null:
+			continue
+		var spec: Dictionary = _frame_specs[custom_photo_count]
+		custom_photo_count += 1
+		var pw: float = spec["pw"]
+		var ph: float = spec["ph"]
+		var q := QuadMesh.new()
+		q.size = Vector2(pw, ph)
+		var mi := MeshInstance3D.new()
+		mi.mesh = q
+		mi.set_meta("dynamic", true)
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var xf: Transform3D = spec["xf"]
+		mi.transform = xf * Transform3D(Basis.IDENTITY, Vector3(0, 0, 0.024))
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.albedo_texture = tex
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		# fill the frame, cropping the picture's edges rather than squashing it
+		var a_t := float(tex.get_width()) / float(tex.get_height())
+		var a_f := pw / ph
+		var sc := Vector3.ONE
+		if a_t > a_f:
+			sc.x = a_f / a_t
+		else:
+			sc.y = a_t / a_f
+		m.uv1_scale = sc
+		m.uv1_offset = Vector3((1.0 - sc.x) * 0.5, (1.0 - sc.y) * 0.5, 0.0)
+		mi.material_override = m
+		add_child(mi)
+		_custom_nodes.append(mi)
+		_custom_mats.append([m, xf.origin])
+	_tint_key = ""
+	_retint_custom()
+	_reload_tv_playlist()
+
+
+func _retint_custom() -> void:
+	var key := "%s|%.2f|%d" % [is_night, dim_amount, probes.size()]
+	if key == _tint_key:
+		return
+	_tint_key = key
+	for it in _custom_mats:
+		var c := light_at(it[1])
+		var lum := clampf(maxf(c.r, maxf(c.g, c.b)), 0.0, 1.0)
+		(it[0] as StandardMaterial3D).albedo_color = Color(c.r, c.g, c.b).lerp(Color(lum, lum, lum), 0.0) * 1.05
+
+
+func custom_summary() -> String:
+	return "%d picture%s on the walls · %d TV clip%s" % [custom_photo_count, "" if custom_photo_count == 1 else "s", custom_video_count, "" if custom_video_count == 1 else "s"]
 
 
 func _hang_photos() -> void:
@@ -1949,11 +2026,19 @@ var _tv_index := -1
 var _duck: AudioEffectAmplify
 
 
+var _tv_default: Array[String] = []
+var _tv_slide: TextureRect
+var _slide_timer: Timer
+var _slide_files: Array[String] = []
+var _slide_i := 0
+
+
 func _setup_tv_video() -> void:
 	for i in range(1, 100):
 		var path := "res://assets/tv/clip%d.ogv" % i
 		if ResourceLoader.exists(path):
-			_tv_clips.append(path)
+			_tv_default.append(path)
+	_tv_clips = _tv_default.duplicate()
 	_tv_vp = SubViewport.new()
 	_tv_vp.size = Vector2i(512, 288)
 	_tv_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
@@ -1965,6 +2050,21 @@ func _setup_tv_video() -> void:
 	_tv_video.bus = "TV"
 	_tv_video.finished.connect(_tv_next)
 	_tv_vp.add_child(_tv_video)
+	_tv_slide = TextureRect.new()
+	_tv_slide.size = Vector2(512, 288)
+	_tv_slide.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_tv_slide.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	_tv_slide.visible = false
+	_tv_vp.add_child(_tv_slide)
+	_slide_timer = Timer.new()
+	_slide_timer.one_shot = true
+	_slide_timer.timeout.connect(_slide_next)
+	add_child(_slide_timer)
+	var rt := Timer.new()  # keeps the custom pictures lit like the room they hang in
+	rt.wait_time = 0.7
+	rt.autostart = true
+	rt.timeout.connect(_retint_custom)
+	add_child(rt)
 	_tv_mat = StandardMaterial3D.new()
 	_tv_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_tv_mat.albedo_texture = _tv_vp.get_texture()
@@ -2003,10 +2103,61 @@ func set_tv(on: bool, clip := -1) -> void:
 		_tv_screen.material_override = Build.mat(Color("#8fd3ff"), 0.4, 1.6)
 
 
+## Your clips (Movies/PekaBoo/*.ogv) replace the built-in ones; with only pictures the TV
+## shows them as a slideshow between the built-in clips.
+func _reload_tv_playlist() -> void:
+	var vids := Custom.videos()
+	custom_video_count = vids.size()
+	_tv_clips = []
+	if not vids.is_empty():
+		_tv_clips.assign(vids)
+	else:
+		_tv_clips = _tv_default.duplicate()
+		if custom_photo_count > 0:
+			_tv_clips.append("slideshow")
+	_slide_files = Custom.photos()
+	if tv_on:
+		set_tv(true)
+
+
 func _play_clip(i: int) -> void:
 	_tv_index = i % _tv_clips.size()
-	_tv_video.stream = load(_tv_clips[_tv_index])
+	var entry := _tv_clips[_tv_index]
+	_slide_timer.stop()
+	if entry == "slideshow":
+		_tv_video.stop()
+		_tv_video.visible = false
+		_slide_i = 0
+		_show_slide()
+		return
+	_tv_slide.visible = false
+	_tv_video.visible = true
+	if entry.begins_with("res://"):
+		_tv_video.stream = load(entry)
+	else:
+		var s := VideoStreamTheora.new()
+		s.file = entry
+		_tv_video.stream = s
 	_tv_video.play()
+
+
+func _show_slide() -> void:
+	if _slide_files.is_empty():
+		_tv_next()
+		return
+	var tex := Custom.load_photo(_slide_files[_slide_i % _slide_files.size()])
+	if tex != null:
+		_tv_slide.texture = tex
+		_tv_slide.visible = true
+	_slide_timer.start(6.0)
+
+
+func _slide_next() -> void:
+	_slide_i += 1
+	if _slide_i >= _slide_files.size():
+		_tv_next()
+	else:
+		_show_slide()
 
 
 ## When a clip ends, play a different random one.
