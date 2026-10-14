@@ -1966,7 +1966,7 @@ func reload_custom() -> void:
 		mi.set_meta("dynamic", true)
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		var xf: Transform3D = spec["xf"]
-		mi.transform = xf * Transform3D(Basis.IDENTITY, Vector3(0, 0, 0.024))
+		mi.transform = xf * Transform3D(Basis.IDENTITY, Vector3(0, 0, 0.045))  # clear of the baked photo even at 16-bit depth
 		var m := StandardMaterial3D.new()
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		m.albedo_texture = tex
