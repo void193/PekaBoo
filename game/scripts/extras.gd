@@ -657,6 +657,10 @@ func _take_selfie() -> void:
 
 func _save_photo(img: Image) -> String:
 	var name := "PekaBoo_%d.png" % int(Time.get_unix_time_from_system())
+	if OS.get_name() == "Android":
+		var g := _save_to_gallery(img, name)
+		if g != "":
+			return g
 	var dirs := []
 	var pics := OS.get_system_dir(OS.SYSTEM_DIR_PICTURES)
 	if pics != "":
@@ -670,6 +674,25 @@ func _save_photo(img: Image) -> String:
 		if img.save_png(dpair[0] + "/" + name) == OK:
 			return dpair[1]
 	return ""
+
+
+## Android: hand the picture to the system's MediaStore, so it shows up in the Gallery / Google
+## Photos straight away (plain files in Pictures/ aren't indexed, or can't be written at all).
+func _save_to_gallery(img: Image, name: String) -> String:
+	var tmp := OS.get_user_data_dir() + "/" + name
+	if img.save_png(tmp) != OK:
+		return ""
+	var rt = Engine.get_singleton("AndroidRuntime") if Engine.has_singleton("AndroidRuntime") else null
+	if rt == null:
+		return ""
+	var act = rt.getActivity()
+	var media = JavaClassWrapper.wrap("android.provider.MediaStore$Images$Media")
+	if act == null or media == null:
+		return ""
+	var url = media.insertImage(act.getContentResolver(), tmp, name.get_basename(), "PekaBoo selfie")
+	DirAccess.remove_absolute(tmp)
+	print("selfie: MediaStore -> ", url)
+	return "Gallery" if url != null and str(url) != "" else ""
 
 
 # ---------- weather ----------

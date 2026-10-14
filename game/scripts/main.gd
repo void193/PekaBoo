@@ -250,6 +250,9 @@ func _ready() -> void:
 		qa.call_deferred("run")
 	elif auto == "bench" and _bench_chill:
 		_on_chill_solo("Bench", my_char)
+		if "--selfietest" in OS.get_cmdline_args() + OS.get_cmdline_user_args():
+			await get_tree().create_timer(4.0).timeout
+			extras.action("selfie")
 	elif auto == "bench":
 		_on_explore("Bench", my_char)
 		if _exp_nochar:
