@@ -71,7 +71,8 @@ func enter() -> void:
 		_sky_mat.shader = load("res://scripts/night_sky.gdshader")
 		_sky_mat.set_shader_parameter("moon_dir", (-House.MOON_DIR).normalized())
 		_sky_mat.set_shader_parameter("star_tex", _star_texture())
-	env.sky.sky_material = _sky_mat
+	if not _cx("nosky"):
+		env.sky.sky_material = _sky_mat
 	# no screen-wide glow: it cost ~12 FPS on the phone; the halo sprites give the soft light instead
 	env.adjustment_saturation = 1.18
 	env.adjustment_contrast = 1.06
@@ -80,7 +81,7 @@ func enter() -> void:
 		main.sun.visible = false
 	if _decor == null:
 		_build_decor()
-	_decor.visible = true
+	_decor.visible = not _cx("nodecor")
 	_relight()
 	Sfx.night = true
 	# the host (or you alone) picks the song and tells both phones; the other waits for it
@@ -166,10 +167,19 @@ func _glow_mat(c: Color) -> StandardMaterial3D:
 	m.albedo_texture = _glow_texture()
 	m.albedo_color = Color(c.r * c.a, c.g * c.a, c.b * c.a, 1.0)
 	m.disable_receive_shadows = true
-	m.distance_fade_mode = BaseMaterial3D.DISTANCE_FADE_PIXEL_DITHER
-	m.distance_fade_min_distance = 0.4
-	m.distance_fade_max_distance = 1.6
+	if not _cx("nodither"):
+		m.distance_fade_mode = BaseMaterial3D.DISTANCE_FADE_PIXEL_DITHER
+		m.distance_fade_min_distance = 0.4
+		m.distance_fade_max_distance = 1.6
 	return m
+
+
+## Benchmark experiments: --cx=nodecor,nosky,nodither (comma list; use ':' on the phone)
+func _cx(k: String) -> bool:
+	for a in OS.get_cmdline_args() + OS.get_cmdline_user_args():
+		if a.begins_with("--cx=") and k in a.substr(5).replace(":", ",").split(","):
+			return true
+	return false
 
 
 func _quad(parent: Node3D, size: float, pos: Vector3, mat: Material) -> MeshInstance3D:
