@@ -66,6 +66,8 @@ var _menu_panel := ""
 var _shot_names := PackedStringArray()  # --names=Rubin:Babita (screenshots / trailer)
 var _shot_nohud := false
 var _show_spot := 13
+var _dolly: Array = []
+var _dolly_t := 0.0
 var _shot_spin := 0.0   # --spin=0.15: the camera turns slowly (background videos)
 var _show_t := 0.0
 var _shot_pair := PackedStringArray()   # --pair=1,2 (my character, partner's character)
@@ -502,6 +504,11 @@ func _parse_args() -> void:
 			var sp := a.substr(7).split(":")
 			auto = "botshow" + sp[0]
 			_show_spot = int(sp[1]) if sp.size() > 1 else 13
+		elif a.begins_with("--dolly="):
+			# --dolly=x0:z0:x1:z1:yaw:y:secs:pitch  (the camera glides from one spot to another)
+			_dolly = []
+			for part in a.substr(8).split(":"):
+				_dolly.append(float(part))
 		elif a.begins_with("--spin="):
 			_shot_spin = float(a.substr(7))
 		elif a == "--nohud":
@@ -2346,6 +2353,8 @@ func _process(dt: float) -> void:
 
 	if auto == "bench":
 		_bench_tick(dt)
+	elif auto == "shot":
+		_shot_motion(dt)
 	elif auto != "" and auto != "qa" and not auto.begins_with("shot"):
 		_autotest(dt)
 	_fps_log_t += dt
@@ -2800,6 +2809,20 @@ func _sync_test(dt: float) -> void:
 			vis = "%s visible=%s err=%.2fm" % [r.player_name, r._visual.visible, r.global_position.distance_to(r._target)]
 		print("[%s] SYNC states=%d avg_age=%.0fms worst=%dms phase=%s partner: %s" % [auto, ages.size(), avg, worst, phase, vis])
 		get_tree().quit()
+
+
+func _shot_motion(dt: float) -> void:
+	if me == null or phase == "menu":
+		return
+	if _shot_spin != 0.0:
+		me.yaw += _shot_spin * dt
+	if _dolly.size() >= 8:
+		_dolly_t += dt
+		var k := smoothstep(0.0, 1.0, clampf(_dolly_t / maxf(0.1, float(_dolly[6])), 0.0, 1.0))
+		me.global_position = Vector3(lerpf(_dolly[0], _dolly[2], k), _dolly[5], lerpf(_dolly[1], _dolly[3], k))
+		me.velocity = Vector3.ZERO
+		me.yaw = _dolly[4]
+		me.pitch = _dolly[7]
 
 
 func _autotest(dt: float) -> void:
